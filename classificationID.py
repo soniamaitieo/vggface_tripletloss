@@ -386,3 +386,10 @@ hist2 =model_emb.fit(
 
 #logit : https://datascience.stackexchange.com/questions/73093/what-does-from-logits-true-do-in-sparsecategoricalcrossentropy-loss-function
 """
+
+f = open("/home/sonia/StatTypicalityHuman/results/2021-02-05-16-13/truc.txt", "w")
+for fi in val_ds.take(val_size):
+    f.write((print(fi.numpy()))
+f.close()
+
+
