@@ -12,9 +12,9 @@ import numpy as np
 
 
 img_height, img_width = 224,224
-BATCH_SIZE = 64
+BATCH_SIZE = 128
 
-model_path = "/home/sonia/StatTypicalityHuman/results/2021-02-05-16-13/my_model"
+model_path = "/home/sonia/StatTypicalityHuman/results/2021-02-10-14-21/my_model"
 new_model = tf.keras.models.load_model(model_path)
 
 def embedding_model(model_path):
@@ -63,8 +63,9 @@ def decode_img(img):
   # convert the compressed string to a 3D uint8 tensor
   img = tf.image.decode_jpeg(img, channels=3)
   # resize the image to the desired size
-  return tf.image.resize(img, [img_height, img_width])
-
+  resized_image = tf.image.resize(img, [224, 224])
+  final_image = tf.keras.applications.vgg16.preprocess_input(resized_image)
+  return final_image
 
 # To create the single testing of validation example with image and its corresponding label
 def process_path(file_path):
@@ -102,7 +103,7 @@ y = np.concatenate([y for x, y in test_ds], axis=0)
 #truc = class_names[y]
 res_emb = mymodel.predict(test_ds)
 
-#np.savetxt("/home/sonia/StatTypicalityHuman/results/2021-02-04-10-40" + "/CFDvecs.tsv", res_emb, delimiter='\t')
+np.savetxt("/home/sonia/StatTypicalityHuman/results/2021-02-10-14-21/" + "/CFDvecs.tsv", res_emb, delimiter='\t')
 
 
 MU = np.mean(res_emb, axis=0)
@@ -110,9 +111,10 @@ SIGMA = np.cov(res_emb, rowvar=0)
                            
 from scipy.stats import multivariate_normal
 var = multivariate_normal(MU, SIGMA , allow_singular=True )
+#var = multivariate_normal(MU, SIGMA  )
 
 pdftest=var.pdf(res_emb)                           
-log_pdftest= -np.log(pdftest)
+log_pdftest= np.log(pdftest)
 
 #np.savetxt("/home/sonia/StatTypicalityHuman/results/2021-02-05-16-13/" + "/log_pdftest.tsv", log_pdftest, delimiter='\t')
 
@@ -137,10 +139,13 @@ stat_typ =  pd.DataFrame()
 stat_typ["Target"] = class_names[y]
 stat_typ["LL"] = log_pdftest
 
+#np.savetxt("/home/sonia/StatTypicalityHuman/results/2021-02-10-14-21/" + "/log_pdftest.tsv", stat_typ["Target"], delimiter='\t')
+stat_typ.to_csv("/home/sonia/StatTypicalityHuman/results/2021-02-10-14-21/" + "/log_pdftest.csv")
 
 stat_typ = stat_typ.groupby(['Target']).mean()
 
 all_df = pd.merge(df, stat_typ , on='Target')
+
 
 
 import matplotlib.pyplot as plt
