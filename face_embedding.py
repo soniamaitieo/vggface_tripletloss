@@ -5,22 +5,34 @@ Created on Wed Feb  3 13:18:11 2021
 
 @author: sonia
 """
-
+#--- LIBRARIES ---#
 import tensorflow as tf
-import os
+import os 
 import numpy as np
+from sklearn.preprocessing import LabelEncoder
+import time
+import datetime
+import sys
+import matplotlib.pyplot as plt
+from keras.callbacks import Callback
+start = time.time()
 
-
+#--- GLOBAL VAR ---#
 img_height, img_width = 224,224
-BATCH_SIZE = 128
+BATCH_SIZE = 64
+inputShape = (224, 224)
 
-model_path = "/home/sonia/StatTypicalityHuman/results/2021-02-10-14-21/my_model"
-new_model = tf.keras.models.load_model(model_path)
+
+data_dir = "/media/sonia/DATA/CFDVersion2.0.3/CFD2.0.3Images"
+#res_dir = "/home/sonia/StatTypicalityHuman/results/2021-02-11-10-20"
+#res_dir = "/home/sonia/StatTypicalityHuman/results/2021-02-11-15-4/"
+res_dir = "/home/sonia/StatTypicalityHuman/results/2021-02-11-15-28"
+
+#--- MODEL ---#
 
 def embedding_model(model_path):
     new_model = tf.keras.models.load_model(model_path)
     new_model.summary()
-    new_model.pop()
     new_model.pop()
     #new_model = tf.keras.models.Sequential(new_model.layers[:-1])
     print("Architecture custom")
@@ -28,30 +40,22 @@ def embedding_model(model_path):
     return(new_model)
 
     
-mymodel = embedding_model(model_path)    
+mymodel = embedding_model(res_dir + "/my_model")  
+  
+mymodel = tf.keras.models.load_model(res_dir + "/my_model")
     
-    
-    
-data_dir = "/media/sonia/DATA/CFDVersion2.0.3/CFD2.0.3Images"
-#data_dir = "/media/sonia/DATA/CASIA90_TRAIN"
+#--- DATA PROCESSING ---#
 
-
-list_ds = tf.data.Dataset.list_files(str(data_dir + '/*/*'), shuffle=False)
-
+list_ds = tf.data.Dataset.list_files(str(data_dir + '/*/*-N.jpg'), shuffle=False)
 
 # get the count of image files in the test directory
-image_count=0
-for dir1 in os.listdir(data_dir):
-    for files in os.listdir(os.path.join(data_dir, dir1)):
-        image_count+=1
-list_ds = list_ds.shuffle(image_count, reshuffle_each_iteration=False)
+image_count= len([i for i in list_ds ])
 
 
 #To process the label
 def get_label(file_path):
   # convert the path to a list of path components separated by sep
   parts = tf.strings.split(file_path, os.path.sep)
-  file_name = parts[-1]
   # The second to last is the class-directory
   one_hot = parts[-2] == class_names
 # Integer encode the label
@@ -79,9 +83,11 @@ def process_path(file_path):
 class_names = np.array(sorted([dir1 for dir1 in os.listdir(data_dir)]))
 
 
-#test_ds = list_ds.take(int(image_count))
-
 test_ds = list_ds
+
+
+#--- DATA INCREASE PERF---#
+
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 # Set `num_parallel_calls` so multiple images are loaded/processed in parallel.
 test_ds = test_ds.map(process_path, num_parallel_calls=AUTOTUNE)
@@ -97,25 +103,57 @@ def configure_for_performance(ds):
 
 test_ds = configure_for_performance(test_ds)
 
-
 y = np.concatenate([y for x, y in test_ds], axis=0)
 
+
+#--- PREDICT - FEATURES EXTRACTION---#
 #truc = class_names[y]
 res_emb = mymodel.predict(test_ds)
+label = class_names[y]
+np.savetxt(res_dir + "/CFDvecs.tsv", res_emb, delimiter='\t')
 
-np.savetxt("/home/sonia/StatTypicalityHuman/results/2021-02-10-14-21/" + "/CFDvecs.tsv", res_emb, delimiter='\t')
 
 
-MU = np.mean(res_emb, axis=0)
-SIGMA = np.cov(res_emb, rowvar=0)
-                           
-from scipy.stats import multivariate_normal
-var = multivariate_normal(MU, SIGMA , allow_singular=True )
-#var = multivariate_normal(MU, SIGMA  )
+#--- READ CFD AND EXTRACT INFORMATIVE COL ---#
+import pandas as pd
+df = pd.read_excel('/media/sonia/DATA/CFDVersion2.0.3/CFD2.0.3NormingDataandCodebook.xlsx',
+                   sheet_name='CFD2.0.3NormingData', engine='openpyxl')
+df = df.drop([0,1,2])
+df.columns = df.iloc[0]
+df = df.reindex(df.index.drop(3))
+#SELECT
+df = df[['Target' , 'Gender', 'Feminine' , 'Attractive' ]]
+df = df.dropna()
 
-pdftest=var.pdf(res_emb)                           
-log_pdftest= np.log(pdftest)
+L = []
+for i in df.Target :
+    print(i)
+    pos_i = np.where(label == i)[0][0]
+    emb_i = res_emb[[pos_i], :]
+    emb_without_i = np.delete(res_emb, (pos_i), axis=0)
+    MU = np.mean(emb_without_i, axis=0)
+    SIGMA = np.cov(emb_without_i, rowvar=0)                      
+    from scipy.stats import multivariate_normal
+    var = multivariate_normal(MU, SIGMA , allow_singular=True )
+    #var = multivariate_normal(MU, SIGMA  )
+    pdftest=var.pdf(emb_i)                           
+    log_pdftest= np.log(pdftest)
+    print(log_pdftest)
+    L.append(log_pdftest)
 
+
+
+
+df["LL"] = L
+
+P = []
+from scipy import stats
+for dim in range (90):
+    plt.hist(res_emb[:, dim]) 
+    k2, p = stats.normaltest(res_emb[:, dim])
+    P.append(p)
+toto = [o>0.005 for o in P]
+    
 #np.savetxt("/home/sonia/StatTypicalityHuman/results/2021-02-05-16-13/" + "/log_pdftest.tsv", log_pdftest, delimiter='\t')
 
 import pandas as pd
@@ -144,7 +182,7 @@ stat_typ.to_csv("/home/sonia/StatTypicalityHuman/results/2021-02-10-14-21/" + "/
 
 stat_typ = stat_typ.groupby(['Target']).mean()
 
-all_df = pd.merge(df, stat_typ , on='Target')
+all_df = df
 
 
 
@@ -172,6 +210,8 @@ def all_preprocess_image(image_path):
     img = np.expand_dims(img, axis=0)
     img =  utils.preprocess_input(img)
     return img
+
+
 
 
 TEST= map(all_preprocess_image, full_path)
