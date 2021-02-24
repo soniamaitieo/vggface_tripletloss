@@ -16,18 +16,22 @@ import sys
 import matplotlib.pyplot as plt
 from keras.callbacks import Callback
 start = time.time()
+import tensorflow_addons as tfa
 
 #--- GLOBAL VAR ---#
 img_height, img_width = 224,224
-BATCH_SIZE = 64
+BATCH_SIZE = 128
 inputShape = (224, 224)
 
 
 data_dir = "/media/sonia/DATA/CFDVersion2.0.3/CFD2.0.3Images"
 #res_dir = "/home/sonia/StatTypicalityHuman/results/2021-02-11-10-20"
 #res_dir = "/home/sonia/StatTypicalityHuman/results/2021-02-11-15-4/"
-res_dir = "/home/sonia/StatTypicalityHuman/results/2021-02-11-15-28"
-
+#res_dir = "/home/sonia/StatTypicalityHuman/results/2021-02-11-15-28"
+#res_dir = "/home/sonia/StatTypicalityHuman/results/2021-02-16-16-32"
+#res_dir = "/home/sonia/StatTypicalityHuman/results/2021-02-22-11-50"
+#res_dir = "/home/sonia/StatTypicalityHuman/results/2021-02-19-17-39"
+res_dir="/home/sonia/StatTypicalityHuman/results/2021-02-23-15-57"
 #--- MODEL ---#
 
 def embedding_model(model_path):
@@ -39,14 +43,21 @@ def embedding_model(model_path):
     print(new_model.summary())
     return(new_model)
 
-    
+
+
+
 mymodel = embedding_model(res_dir + "/my_model")  
   
 mymodel = tf.keras.models.load_model(res_dir + "/my_model")
-    
+
+#data_dir = "/media/sonia/DATA/CASIA90_VAL"
+
+
 #--- DATA PROCESSING ---#
 
-list_ds = tf.data.Dataset.list_files(str(data_dir + '/*/*-N.jpg'), shuffle=False)
+#list_ds = tf.data.Dataset.list_files(str(data_dir + '/*/*-N.jpg'), shuffle=False)
+list_ds = tf.data.Dataset.list_files(str(data_dir + '/*/*.jpg'), shuffle=False)
+
 
 # get the count of image files in the test directory
 image_count= len([i for i in list_ds ])
@@ -68,7 +79,7 @@ def decode_img(img):
   img = tf.image.decode_jpeg(img, channels=3)
   # resize the image to the desired size
   resized_image = tf.image.resize(img, [224, 224])
-  final_image = tf.keras.applications.vgg16.preprocess_input(resized_image)
+  final_image = tf.keras.applications.resnet.preprocess_input(resized_image)
   return final_image
 
 # To create the single testing of validation example with image and its corresponding label
@@ -95,7 +106,7 @@ test_ds = test_ds.map(process_path, num_parallel_calls=AUTOTUNE)
 
 def configure_for_performance(ds):
   ds = ds.cache()
-  ds = ds.shuffle(buffer_size=1000)
+  #ds = ds.shuffle(buffer_size=1000)
   #mettre drop_remainder=True https://github.com/tensorflow/tensorflow/issues/46123
   ds = ds.batch(BATCH_SIZE)
   ds = ds.prefetch(buffer_size=AUTOTUNE)
@@ -138,7 +149,7 @@ for i in df.Target :
     #var = multivariate_normal(MU, SIGMA  )
     pdftest=var.pdf(emb_i)                           
     log_pdftest= np.log(pdftest)
-    print(log_pdftest)
+    #print(log_pdftest)
     L.append(log_pdftest)
 
 
@@ -148,7 +159,7 @@ df["LL"] = L
 
 P = []
 from scipy import stats
-for dim in range (90):
+for dim in range (128):
     plt.hist(res_emb[:, dim]) 
     k2, p = stats.normaltest(res_emb[:, dim])
     P.append(p)
@@ -220,3 +231,7 @@ test = list(TEST)
 test_tf = tf.convert_to_tensor(test, np.float32)
 
 res_emb2 = mymodel.predict(test)
+
+
+#-----------------------------------------------------------------------------#
+
