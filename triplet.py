@@ -17,7 +17,7 @@ from keras import Model
 import matplotlib.pyplot as plt
 from tensorflow.keras.layers import Flatten, Dense, Input, Lambda
 from keras_vggface.vggface import VGGFace
-import sklearn.metrics.pairwise 
+import sklearn.metrics.pairwise
 from keras.callbacks import Callback
 import random as rd
 """
@@ -34,17 +34,20 @@ if gpus:
 img_height = 224
 img_width = 224
 batch_size = 128
-n_epochs = 200
+n_epochs = 3
 LR = 0.001
 LR2 = 0.00001
 NOFREEZE = 2
 
 
 #data_dir = "/media/sonia/DATA/CASIA90_TRAIN"
-data_dir ="/media/sonia/DATA/CASIA_SUB_TRAIN/images"
+#data_dir ="/media/sonia/DATA/CASIA_SUB_TRAIN/images"
 #data_dir =  "/media/sonia/DATA/CASIA_minitrain"
+data_dir = "/media/sonia/DATA/facescrub/download/faces"
 data_dir = pathlib.Path(data_dir)
-image_count = len(list(data_dir.glob('*/*.jpg')))
+#image_count = len(list(data_dir.glob('*/*.jpg')))
+image_count = len(list(data_dir.glob('*/*.jpeg')))
+
 print(image_count)
 
 
@@ -65,7 +68,7 @@ sys.stdout = open(log_file_path, 'w')
 #OPTIM2 = "keras.optimizers.SGD(lr=0.0001, momentum=0.9, decay=0.0, nesterov=True)"
 params_file_path =  "results/" + todaystr + "/params.txt"
 f = open(params_file_path,'w')
-f.write("base:" + "VGGface resnet50 TOP false" + "\n")
+f.write("base:" + "VGGface VGG16 TOP false" + "\n")
 f.write("weights:" + "VGGface " + "\n")
 f.write("epochs:" + str(n_epochs) + "\n")
 #f.write("epochs2:" + str(NB_EPOCHS2) + "\n")
@@ -73,7 +76,8 @@ f.write("batch_size:" + str(batch_size) + "\n" )
 f.write("optim1:" + 'Adam' + "\n")
 f.write("optim1_LR:" + str(LR) + "\n")
 f.write("optim2_LR:" + str(LR2) + "\n")
-f.write("no freezen layer:" + str(NOFREEZE) + "\n")
+#f.write("no freezen layer:" + str(NOFREEZE) + "\n")
+f.write("dataset_dir:" + str(data_dir) + "\n")
 #f.write("Img_preprocessing" + "rescale=1./255,rotation_range=40,width_shift_range=0.2,height_shift_range=0.2,shear_range=0.2,zoom_range=0.2)")
 #f.write("Img_preprocessing:" + "rescale=1./255, horizontal_flip=False, rotation_range=20,width_shift_range=0.05, height_shift_range=0.05,brightness_range=[0.8,1.2], shear_range=0.1,zoom_range=[0.85,1.15]")
 #f.write("val:" + str(0.20) + "\n")
@@ -87,19 +91,39 @@ f.close()
 
 
 #--- DATA PROCESSING ---#
-list_ds = tf.data.Dataset.list_files(str(data_dir/'*/*'), shuffle=False)
+list_ds = tf.data.Dataset.list_files(str(data_dir/'*/*.jpeg'), shuffle=False)
 #list_ds = tf.data.Dataset.list_files("/media/sonia/DATA/CASIA_SUB_TRAIN/images" + '/*/*', shuffle=False) #shuffle ????
-list_ds = list_ds.shuffle(image_count, reshuffle_each_iteration=False)
+#list_ds = list_ds.shuffle(image_count, reshuffle_each_iteration=False)
 
 class_names = np.array(sorted([dir1 for dir1 in os.listdir(data_dir)]))
 print(class_names)
+"""
 
 val_size = int(image_count * 0.2)
 train_ds = list_ds.skip(val_size)
 val_ds = list_ds.take(val_size)
 
-print(tf.data.experimental.cardinality(train_ds).numpy())
-print(tf.data.experimental.cardinality(val_ds).numpy())
+
+"""
+
+
+"""
+train_size = int(0.7 * image_count)
+val_size = int(0.1 * image_count)
+test_size = int(0.2 * image_count)
+
+train_ds = list_ds.take(train_size)
+test_ds = list_ds.skip(train_size)
+val_ds = test_ds.skip(val_size)
+test_ds = test_ds.take(test_size)
+
+"""
+
+
+
+#print(tf.data.experimental.cardinality(train_ds).numpy())
+#print(tf.data.experimental.cardinality(val_ds).numpy())
+#print(tf.data.experimental.cardinality(test_ds).numpy())
 
 #Convert path to (img, label) tuple
 def get_label(file_path):
@@ -118,8 +142,9 @@ def decode_img(img):
   img = tf.image.decode_jpeg(img, channels=3)
   # resize the image to the desired size
   resized_image = tf.image.resize(img, [224, 224])
-  #final_image = tf.keras.applications.vgg16.preprocess_input(resized_image)
-  final_image = tf.keras.applications.resnet.preprocess_input(resized_image)
+  final_image = tf.keras.applications.vgg16.preprocess_input(resized_image)
+  #final_image = tf.keras.applications.resnet.preprocess_input(resized_image)
+  #final_image = tf.keras.applications.resnet50.preprocess_input(resized_image)
   return final_image
 
 
@@ -132,8 +157,21 @@ def process_path(file_path):
 
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 
-train_ds = train_ds.map(process_path, num_parallel_calls=AUTOTUNE)
-val_ds = val_ds.map(process_path, num_parallel_calls=AUTOTUNE)
+#train_ds = train_ds.map(process_path, num_parallel_calls=AUTOTUNE)
+#val_ds = val_ds.map(process_path, num_parallel_calls=AUTOTUNE)
+#test_ds = test_ds.map(process_path, num_parallel_calls=AUTOTUNE)
+list_ds = list_ds.map(process_path, num_parallel_calls=AUTOTUNE)
+
+# Size of dataset
+n = sum(1 for _ in list_ds)
+n_train = int(n * 0.8)
+n_valid = int(n * 0.1)
+#n_test= int(n * 0.01)
+n_test = n - n_train - n_valid #0.2
+
+train_ds = list_ds.take(n_train)
+val_ds = list_ds.skip(n_train).take(n_valid)
+test_ds = list_ds.skip(n_train + n_valid).take(n_test)
 
 def augment0(image, label):
     #en radian 0.5 environ 30°
@@ -150,7 +188,7 @@ def augment0(image, label):
     # Randomly crop a [_HEIGHT, _WIDTH] section of the image.
     #img = tf.random_crop(image, [img_height,img_width, 3])
     img = tf.image.random_contrast(img, lower=0.8, upper=1.2)
-    img = tf.image.random_saturation(img, lower=0.8, upper=1.2)   
+    img = tf.image.random_saturation(img, lower=0.8, upper=1.2)
     #img = tf.clip_by_value(img, 0.0, 1.0)
     img = tf.image.random_brightness(img, 0.1)
     img = tf.clip_by_value(img, 0.0, 1.0)
@@ -164,7 +202,7 @@ def augment(image, label):
     img = tfa.image.transform_ops.rotate(image, rd_angle)
     #img = tf.clip_by_value(img, 0.0, 1.0)
     img = tf.image.random_contrast(img, lower=0.8, upper=1.2)
-    img = tf.image.random_saturation(img, lower=0.8, upper=1.2) 
+    img = tf.image.random_saturation(img, lower=0.8, upper=1.2)
     img = tf.image.random_brightness(img, 0.3)
     #img = tf.clip_by_value(img, 0.0, 1.0)
     return (img, label)
@@ -189,11 +227,39 @@ def configure_for_performance(ds):
 
 train_ds = configure_for_performance(train_ds)
 #val_ds = configure_for_performance(val_ds)
-val_ds = val_ds.cache().batch(batch_size).prefetch(buffer_size=AUTOTUNE)
-
-
+val_ds = val_ds.cache().batch(batch_size,drop_remainder=True).prefetch(buffer_size=AUTOTUNE) #retirer pour 518
+test_ds =test_ds.cache().batch(batch_size,drop_remainder=True).prefetch(buffer_size=AUTOTUNE) #retirer pour 518
 
 """
+#--- DATA PREPROCESS TEST ---#
+data_dir_test = "/media/sonia/DATA/CASIA90_VAL"
+#data_dir_test = "/media/sonia/DATA/CFDVersion2.0.3/CFD2.0.3Images"
+#--- DATA PROCESSING ---#
+#list_ds = tf.data.Dataset.list_files(str(data_dir + '/*/*-N.jpg'), shuffle=False)
+list_ds_test = tf.data.Dataset.list_files(str(data_dir_test + '/*/*.jpg'), shuffle=False)
+image_count= len([i for i in list_ds_test ])
+class_names = np.array(sorted([dir1 for dir1 in os.listdir(data_dir_test)]))
+test_ds = list_ds_test
+AUTOTUNE = tf.data.experimental.AUTOTUNE
+
+test_ds = test_ds.map(process_path, num_parallel_calls=AUTOTUNE)
+test_ds = test_ds.cache().batch(batch_size).prefetch(buffer_size=AUTOTUNE)
+
+
+#--- DATA PREPROCESS TEST cfd ---#
+#data_dir_test = "/media/sonia/DATA/CASIA90_VAL"
+data_dir_CFD = "/media/sonia/DATA/CFDVersion2.0.3/CFD2.0.3Images"
+#--- DATA PROCESSING ---#
+#list_ds = tf.data.Dataset.list_files(str(data_dir + '/*/*-N.jpg'), shuffle=False)
+list_ds_CFD = tf.data.Dataset.list_files(str(data_dir_CFD + '/*/*.jpg'), shuffle=False)
+image_count= len([i for i in list_ds_CFD ])
+class_names = np.array(sorted([dir1 for dir1 in os.listdir(data_dir_CFD)]))
+test_ds_CFD= list_ds_CFD
+AUTOTUNE = tf.data.experimental.AUTOTUNE
+
+test_ds_CFD = test_ds_CFD.map(process_path, num_parallel_calls=AUTOTUNE)
+test_ds_CFD = test_ds_CFD.cache().batch(batch_size).prefetch(buffer_size=AUTOTUNE)
+
 vgg_model = VGGFace(include_top=True, input_shape=(224, 224, 3))
 vgg_model = vgg_model.layers.pop()
 model = tf.keras.models.Sequential(vgg_model.layers[:-2]) #vgg16
@@ -216,8 +282,8 @@ for layer in model.layers[:-3]:
     layer.trainable = False
 for layer in model.layers:
     print(layer, layer.trainable)
-    
-    
+
+
 vgg_model = VGGFace(model='resnet50', input_shape=(224, 224, 3) , include_top=True)
 last_layer = vgg_model.layers[-1].output
 x = tf.keras.layers.Dense(128, activation=None)(last_layer)
@@ -239,20 +305,11 @@ for layer in model.layers[:-3]:
     layer.trainable = False
 for layer in model.layers:
     print(layer, layer.trainable)
-    
-    
+
+
 ###VGG MODEL###
 
-vgg_model = VGGFace(include_top=True, input_shape=(224, 224, 3))
-model = tf.keras.models.Sequential(vgg_model.layers[:-2])
-model.add(tf.keras.layers.Dense(128, activation=None))
-model.add(tf.keras.layers.Lambda(lambda x: tf.math.l2_normalize(x, axis=1)))
-model.summary()
 
-for layer in model.layers[:-4]:
-    layer.trainable = False
-for layer in model.layers:
-    print(layer, layer.trainable)
 """
 
 def model_resnet50_2():
@@ -260,7 +317,8 @@ def model_resnet50_2():
     from keras.engine import  Model
     vgg_model = VGGFace(model='resnet50', input_shape=(224, 224, 3) , include_top=True)
     last_layer = vgg_model.layers[-2].output
-    x = tf.keras.layers.Dense(128 ,activation=None)(last_layer)
+    x = tf.keras.layers.Dropout(0.5)(last_layer)
+    x = tf.keras.layers.Dense(128 ,activation=None)(x)
     out = tf.keras.layers.Lambda(lambda x: tf.math.l2_normalize(x, axis=1))(x)
     model = Model(vgg_model.input, out)
     print("Architecture custom")
@@ -270,13 +328,25 @@ def model_resnet50_2():
         layer.trainable = False
     for layer in model.layers:
         print(layer, layer.trainable)
+
     return(model)
 
+def model_vgg16():
+    vgg_model = VGGFace(include_top=True, input_shape=(224, 224, 3))
+    model = tf.keras.models.Sequential(vgg_model.layers[:-2])
+    model.add(tf.keras.layers.Dropout(0.7))
+    model.add(tf.keras.layers.Dense(128, activation=None))
+    model.add(tf.keras.layers.Lambda(lambda x: tf.math.l2_normalize(x, axis=1)))
+    model.summary()
+    for layer in model.layers[:-5]:
+        layer.trainable = False
+    for layer in model.layers:
+        print(layer, layer.trainable)
+    return(model)
 
-model = model_resnet50_2()
+#model = model_resnet50_2()
+model = model_vgg16()
 
-
-    
 def calc_TOPacc(distance_array, val_ds, TOP = 5):
     y = np.concatenate([y for x, y in val_ds], axis=0)
     #print(y)
@@ -308,9 +378,8 @@ class TopX(Callback):
     def __init__(self, x):
           self.x = x
           #self.topX = []
-          
     def on_train_begin(self, logs={}):
-          self.topX = []  
+          self.topX = []
     def on_epoch_end(self, epoch, logs={}):
         TOP = 5
         #distance_array = compute_distance(self.model,self.x)
@@ -324,98 +393,12 @@ class TopX(Callback):
         #print(topX)
 
 
-def lr_schedule(epoch):
-  """
-  Returns a custom learning rate that decreases as epochs progress.
-  """
-  learning_rate = 0.001
-  if epoch > 50:
-    learning_rate = 0.0001
-  if epoch > 100:
-    learning_rate = 0.00001
-  tf.summary.scalar('learning rate', data=learning_rate, step=epoch)
-  return learning_rate
-
-lr_callback = tf.keras.callbacks.LearningRateScheduler(lr_schedule)
-
-
-# Compile the model
-model.compile(
-    optimizer=tf.keras.optimizers.Adam(LR),
-    loss=tfa.losses.TripletSemiHardLoss())
-
-#log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-#tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
-
-
-# Train the network
-history = model.fit(
-    train_ds,
-    validation_data = val_ds,
-    epochs=n_epochs,
-   callbacks=[TopX(val_ds),lr_callback]
-    )
-
-#tensorboard --logdir logs/fit
-
-# Evaluate the network
-#results = model.predict(val_ds)
-
-
-
-
-#distance_array = sklearn.metrics.pairwise_distances(results, metric='euclidean') 
-#all_TOP3_acc = []
-#topX = calc_TOPacc(distance_array, val_ds, TOP = 5)
-
-
-
-def plot_loss_acc(hist , todaystr):
-    save_path = "results/" + todaystr + "/"
-    train_loss=hist.history['loss']
-    xc=range(len(train_loss))
-    plt.figure(1,figsize=(7,5))
-    plt.plot(xc,train_loss)
-    plt.xlabel('num of Epochs')
-    plt.ylabel('loss')
-    plt.title('train_loss')
-    plt.grid(True)
-    plt.legend(['train'])
-    plt.savefig(save_path + 'loss.png')
-    plt.close()
-    plt.style.use(['classic'])
-    plt.figure(2,figsize=(7,5))
-    plt.plot(xc, all_TOP3_acc)
-    plt.xlabel('num of Epochs')
-    plt.ylabel('TOP 5 accuracy')
-    plt.grid(True)
-    plt.legend(['val'],loc=4)
-    plt.style.use(['classic'])
-    plt.savefig(save_path + 'acc.png')
-    plt.close()
-
-plot_loss_acc(history , todaystr)
-
-
-
-#log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-#tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
-
-
-
-#--- evaluate mAP on val_ds ---#
-
-y_label = list(np.concatenate([y for x, y in val_ds], axis=0))
-res_val = model.predict(val_ds,verbose=1) #embedding
-
-
 
 # We make a dictionnary where the index is the number of the individual, and the value is a list with the position of associated images into a list
 
 def duplicates(lst, item):
     return [i for i, x in enumerate(lst) if x == item]
 
-y_dict = dict((x, duplicates(y_label, x)) for x in set(y_label) if y_label.count(x) > 1) #on vire indiv qui ont 1 seule image avec la condition
 
 #This function sample the image-anchor for the query indiv and 1 image for each indiv
 def sample_candidates_dist(curr_ind , y_dict):
@@ -429,7 +412,7 @@ def sample_candidates_dist(curr_ind , y_dict):
     return((pict_for_each_ind,A))
 
 
-def calc_ap_per_ind(curr_ind, y_dict,TOP=5):
+def calc_ap_per_ind(res_val,curr_ind, y_dict,TOP=5):
     #get candidates immg
     all_img, anchor = sample_candidates_dist(curr_ind, y_dict = y_dict)
     #Get embedding of candidates images
@@ -453,9 +436,96 @@ def calc_ap_per_ind(curr_ind, y_dict,TOP=5):
     else:
         av_precision = 0
     return(av_precision)
-    
 
-# TOP = 5 pour calc mAP@5 
+
+
+mAP_history=[]
+class map_N(Callback):
+    def __init__(self, x):
+        self.x = x
+    def on_train_begin(self, logs={}):
+        self.all100_mAP = []
+        self.TOP = 5
+    def on_epoch_end(self, epoch, logs={}):
+        res_val = self.model.predict(self.x,verbose=1) #embedding
+        y_label = list(np.concatenate([y for x, y in self.x], axis=0))
+        y_dict = dict((x, duplicates(y_label, x)) for x in set(y_label) if y_label.count(x) > 1) #on vire indiv qui ont 1 seule image avec la condition
+        y_label
+        for it in range(100) :
+            mAP_each_ind= [calc_ap_per_ind(res_val,i, y_dict,TOP=self.TOP) for i in list(y_dict.keys())]
+            self.all100_mAP.append(np.mean(mAP_each_ind))
+        print(' MAP@{} - Accuracy {} %'.format(self.TOP, round(np.mean(self.all100_mAP)*100,1)))
+        mAP_history.append(round(np.mean(self.all100_mAP)*100,1))
+
+
+def lr_schedule(epoch):
+  """
+  Returns a custom learning rate that decreases as epochs progress.
+  """
+  learning_rate = 0.001
+  if epoch > 20:
+    learning_rate = 0.0001
+  if epoch > 70:
+    learning_rate = 0.00001
+  tf.summary.scalar('learning rate', data=learning_rate, step=epoch)
+  return learning_rate
+
+lr_callback = tf.keras.callbacks.LearningRateScheduler(lr_schedule)
+
+
+# Compile the model
+model.compile(
+    optimizer=tf.keras.optimizers.Adam(LR),
+    loss=tfa.losses.TripletSemiHardLoss())
+
+history = model.fit(
+    train_ds,
+    validation_data = val_ds,
+    epochs=n_epochs,
+   callbacks=[lr_callback,map_N(val_ds)]
+    )
+
+def plot_loss_acc(hist , todaystr):
+    save_path = "results/" + todaystr + "/"
+    train_loss=hist.history['loss']
+    val_loss = hist.history['val_loss']
+    xc=range(len(train_loss))
+    plt.figure(1,figsize=(7,5))
+    plt.plot(xc,train_loss)
+    plt.plot(xc,val_loss)
+    plt.xlabel('num of Epochs')
+    plt.ylabel('loss')
+    plt.title('train_loss vs val_loss')
+    plt.title('train_loss')
+    plt.grid(True)
+    plt.legend(['train','val'])
+    plt.xlabel('num of Epochs')
+    plt.ylabel('loss')
+    plt.title('train_loss')
+    plt.grid(True)
+    plt.legend(['train'])
+    plt.savefig(save_path + 'loss.png')
+    plt.close()
+    plt.style.use(['classic'])
+    plt.figure(2,figsize=(7,5))
+    plt.plot(xc, mAP_history)
+    plt.xlabel('num of Epochs')
+    plt.ylabel('TOP 5 accuracy')
+    plt.grid(True)
+    plt.legend(['val'],loc=4)
+    plt.style.use(['classic'])
+    plt.savefig(save_path + 'acc.png')
+    plt.close()
+
+plot_loss_acc(history , todaystr)
+
+
+"""
+y_label = list(np.concatenate([y for x, y in val_ds], axis=0))
+res_val = model.predict(val_ds,verbose=1) #embedding
+
+y_dict = dict((x, duplicates(y_label, x)) for x in set(y_label) if y_label.count(x) > 1) #on vire indiv qui ont 1 seule image avec la condition
+#TOP = 5 pour calc mAP@5 
 all1000_mAP = []
 for it in range(1000) : 
     #On applique pour chaque indiv le calcule de l' average precision
@@ -470,46 +540,4 @@ print(np.mean(all1000_mAP))
 
 modeltosave = "results/" + todaystr + "/my_model"
 model.save(modeltosave)
-
 """
-def compute_ap(val_ds, n = 5):
-    #for each query: return ap value into a list
-    #Get labels of val
-    y = np.concatenate([y for x, y in val_ds], axis=0)
-    #calc pairwise dist
-    distance_array = sklearn.metrics.pairwise_distances(model.predict(val_ds,verbose=1), metric='l2') 
-    all_av = []
-    for img in range(len(distance_array)):
-    #for img in range(10):
-        L=[]
-        #i = 1
-        distance_img = distance_array[img,:]
-        #This returns the n-smallest values for each query
-        L=  np.argpartition(distance_img,range(n+1))[1:n+1]
-        tp_counter = 0
-        cumulate_precision = 0
-        for i in range(len(L)) :
-            if y[img] == y[L[i]]:
-                #compte le nombre de match
-                tp_counter += 1
-                cumulate_precision += (float(tp_counter)/float(i+1))
-                #print("imgQ:" + str(y[img]))
-                #print("img:" + str(y[i]))
-                #print(cumulate_precision)
-        if tp_counter != 0:
-            #av_precision = cumulate_precision/float(tp_counter)
-            av_precision = cumulate_precision/n
-        else:
-            av_precision = 0
-        #print(av_precision)
-        all_av.append(av_precision)
-        av_precision = 0
-    return all_av
-
-list_all_ap = compute_ap(val_ds, n = 5)
-map_val = np.mean(list_all_ap)
-print("mAP5")
-print(map_val) 
-"""
-
-
