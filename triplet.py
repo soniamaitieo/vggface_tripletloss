@@ -34,11 +34,11 @@ if gpus:
 img_height = 224
 img_width = 224
 batch_size = 128
-n_epochs = 3
+n_epochs = 50
 LR = 0.001
 LR2 = 0.00001
-NOFREEZE = 2
-
+NOFREEZE = 5
+dr = 0.5
 
 #data_dir = "/media/sonia/DATA/CASIA90_TRAIN"
 #data_dir ="/media/sonia/DATA/CASIA_SUB_TRAIN/images"
@@ -83,7 +83,7 @@ f.write("dataset_dir:" + str(data_dir) + "\n")
 #f.write("val:" + str(0.20) + "\n")
 #f.write("early_stop:" + str(10) + "\n")
 #f.write("reducelr0.1:" + str(5) + "\n")
-#f.write("dropout1:" + str(0.2) + "\n")
+#f.write("dropout:" + str(dr) + "\n")
 #f.write("HorizontalFlip:" + "True" + "\n")
 #f.write(json.dumps(historique.history))
 f.close()
@@ -161,18 +161,47 @@ AUTOTUNE = tf.data.experimental.AUTOTUNE
 #val_ds = val_ds.map(process_path, num_parallel_calls=AUTOTUNE)
 #test_ds = test_ds.map(process_path, num_parallel_calls=AUTOTUNE)
 list_ds = list_ds.map(process_path, num_parallel_calls=AUTOTUNE)
+"""
 
-# Size of dataset
-n = sum(1 for _ in list_ds)
-n_train = int(n * 0.8)
-n_valid = int(n * 0.1)
-#n_test= int(n * 0.01)
-n_test = n - n_train - n_valid #0.2
 
 train_ds = list_ds.take(n_train)
 val_ds = list_ds.skip(n_train).take(n_valid)
 test_ds = list_ds.skip(n_train + n_valid).take(n_test)
+"""
+#CLOSE-DS#
+# Size of dataset
+n = sum(1 for _ in list_ds)
+n_train = int(n * 0.7)
+n_val = int(n * 0.1)
+#n_test= int(n * 0.01)
+n_test = n - n_train - n_val #0.2
 
+def choose_ds(list_ds , choice, image_count,n_train,n_val,n_test):
+    if choice =="close":
+        #CLOSE-DS#
+        list_ds = list_ds.shuffle(image_count, reshuffle_each_iteration=False)
+        train_ds = list_ds.take(n_train)
+        val_ds = list_ds.skip(n_train).take(n_val)
+        test_ds = list_ds.skip(n_train + n_val).take(n_test)
+        return(train_ds,val_ds,test_ds)
+    if choice =="semiclose":
+        #SEMI-CLOSE-DS#
+        test_ds = list_ds.take(n_test)
+        close_ds = list_ds.skip(n_test).take(n_train + n_val)
+        close_ds = close_ds.shuffle(n_train + n_val , reshuffle_each_iteration=False)
+        train_ds = close_ds.take(n_train)
+        val_ds = close_ds.skip(n_train).take(n_val)
+        return(train_ds,val_ds,test_ds)
+    if choice =="open":
+        #OPEN-DS#
+        train_ds = list_ds.take(n_train)
+        val_ds = list_ds.skip(n_train).take(n_val)
+        test_ds = list_ds.skip(n_train + n_val).take(n_test)
+        return(train_ds,val_ds,test_ds)
+    
+    
+train_ds,val_ds,test_ds=choose_ds(list_ds , "semiclose", image_count,n_train,n_val,n_test)  
+  
 def augment0(image, label):
     #en radian 0.5 environ 30°
     #img = tfa.image.transform_ops.rotate(image, 0.5)
@@ -219,7 +248,7 @@ def augmentso(image, label):
 # optimze preprocessing performance
 def configure_for_performance(ds):
   ds = ds.cache()
-  ds = ds.shuffle(buffer_size=1000)
+  #ds = ds.shuffle(buffer_size=n_train)
   ds = ds.map(augment, num_parallel_calls=AUTOTUNE) # augmentation call
   ds = ds.batch(batch_size,drop_remainder=True)
   ds = ds.prefetch(buffer_size=AUTOTUNE)
@@ -317,14 +346,14 @@ def model_resnet50_2():
     from keras.engine import  Model
     vgg_model = VGGFace(model='resnet50', input_shape=(224, 224, 3) , include_top=True)
     last_layer = vgg_model.layers[-2].output
-    x = tf.keras.layers.Dropout(0.5)(last_layer)
+    x = tf.keras.layers.Dropout(0.2)(last_layer)
     x = tf.keras.layers.Dense(128 ,activation=None)(x)
     out = tf.keras.layers.Lambda(lambda x: tf.math.l2_normalize(x, axis=1))(x)
     model = Model(vgg_model.input, out)
     print("Architecture custom")
     print(model.summary())
     # -8 si defreeze le dernier bloc de conv
-    for layer in model.layers[:-8]:
+    for layer in model.layers[:-3]:
         layer.trainable = False
     for layer in model.layers:
         print(layer, layer.trainable)
@@ -334,7 +363,7 @@ def model_resnet50_2():
 def model_vgg16():
     vgg_model = VGGFace(include_top=True, input_shape=(224, 224, 3))
     model = tf.keras.models.Sequential(vgg_model.layers[:-2])
-    model.add(tf.keras.layers.Dropout(0.7))
+    model.add(tf.keras.layers.Dropout(dr))
     model.add(tf.keras.layers.Dense(128, activation=None))
     model.add(tf.keras.layers.Lambda(lambda x: tf.math.l2_normalize(x, axis=1)))
     model.summary()
@@ -476,14 +505,17 @@ lr_callback = tf.keras.callbacks.LearningRateScheduler(lr_schedule)
 # Compile the model
 model.compile(
     optimizer=tf.keras.optimizers.Adam(LR),
+    #optimizer = tf.keras.optimizers.Adam(LR,beta_1=0.02,beta_2=0.02),
     loss=tfa.losses.TripletSemiHardLoss())
 
 history = model.fit(
     train_ds,
     validation_data = val_ds,
     epochs=n_epochs,
-   callbacks=[lr_callback,map_N(val_ds)]
+   callbacks=[map_N(val_ds),map_N(train_ds)]
     )
+
+mAP_history_val, mAP_history_train = mAP_history[::2],mAP_history[1::2]
 
 def plot_loss_acc(hist , todaystr):
     save_path = "results/" + todaystr + "/"
@@ -496,7 +528,8 @@ def plot_loss_acc(hist , todaystr):
     plt.xlabel('num of Epochs')
     plt.ylabel('loss')
     plt.title('train_loss vs val_loss')
-    plt.title('train_loss')
+    plt.legend(['train','val'],loc=4)
+    #plt.title('train_loss')
     plt.grid(True)
     plt.legend(['train','val'])
     plt.xlabel('num of Epochs')
@@ -508,36 +541,92 @@ def plot_loss_acc(hist , todaystr):
     plt.close()
     plt.style.use(['classic'])
     plt.figure(2,figsize=(7,5))
-    plt.plot(xc, mAP_history)
+    #plt.plot(xc, mAP_history)
+    plt.plot(xc, mAP_history_train)
+    plt.plot(xc, mAP_history_val)
     plt.xlabel('num of Epochs')
-    plt.ylabel('TOP 5 accuracy')
+    plt.ylabel('mAP@5 accuracy')
     plt.grid(True)
-    plt.legend(['val'],loc=4)
+    plt.legend(['train','val'],loc=4)
     plt.style.use(['classic'])
     plt.savefig(save_path + 'acc.png')
     plt.close()
 
 plot_loss_acc(history , todaystr)
 
-
 """
-y_label = list(np.concatenate([y for x, y in val_ds], axis=0))
-res_val = model.predict(val_ds,verbose=1) #embedding
+y_label = list(np.concatenate([y for x, y in test_ds], axis=0))
+res_val = model.predict(test_ds,verbose=1) #embedding
 
 y_dict = dict((x, duplicates(y_label, x)) for x in set(y_label) if y_label.count(x) > 1) #on vire indiv qui ont 1 seule image avec la condition
+
 #TOP = 5 pour calc mAP@5 
 all1000_mAP = []
-for it in range(1000) : 
+for it in range(100) : 
     #On applique pour chaque indiv le calcule de l' average precision
     #mAP_each_ind liste avec le AP de tous les indivdus
-    mAP_each_ind= [calc_ap_per_ind(i, y_dict,TOP=5) for i in list(y_dict.keys())]
+    mAP_each_ind= [calc_ap_per_ind(res_val,i,  y_dict,TOP=5) for i in list(y_dict.keys())]
     all1000_mAP.append( np.mean(mAP_each_ind))
     
 np.mean(all1000_mAP)
 
 print(" mAP@5 ")
 print(np.mean(all1000_mAP))
-
+"""
 modeltosave = "results/" + todaystr + "/my_model"
 model.save(modeltosave)
+
 """
+y_label = list(np.concatenate([y for x, y in train_ds], axis=0))
+y_dict = dict((x, duplicates(y_label, x)) for x in set(y_label) if y_label.count(x) > 1) #on vire indiv qui ont 1 seule image avec la condition
+mAP_each_ind= [calc_ap_per_ind(model.predict(train_ds,verbose=1),i,  y_dict,TOP=5) for i in list(y_dict.keys())]
+"""
+y_label = list(np.concatenate([y for x, y in test_ds], axis=0))
+res_val = model.predict(test_ds,verbose=1) #embedding
+y_dict = dict((x, duplicates(y_label, x)) for x in set(y_label) if y_label.count(x) > 1) #on vire indiv qui ont 1 seule image avec la condition
+
+np.savetxt(("results/"   +  todaystr  + "/label_test.tsv"), y_label, delimiter='\t')
+np.savetxt(("results/"   +  todaystr  + "/vecs_test.tsv"), res_val , delimiter='\t')
+
+
+all1000_mAP = []
+for it in range(100) : 
+    #On applique pour chaque indiv le calcule de l' average precision
+    #mAP_each_ind liste avec le AP de tous les indivdus
+    mAP_each_ind= [calc_ap_per_ind(res_val,i,  y_dict,TOP=5) for i in list(y_dict.keys())]
+    all1000_mAP.append( np.mean(mAP_each_ind))
+    
+np.mean(all1000_mAP)
+
+print(" mAP@5 (IT100) - TEST ")
+print(np.mean(all1000_mAP))
+
+def dict_ind_img(train_ds,val_ds,test_ds):
+    """
+    Return 1 dict of 3 dict (train, val,test) with list of all images for each indiv for each ds
+    """
+    label_tmp = [y.numpy() for x, y in train_ds]
+    train_dict = dict((x, duplicates(label_tmp, x)) for x in set(label_tmp) ) 
+    label_tmp = [y.numpy() for x, y in val_ds]
+    val_dict = dict((x, duplicates(label_tmp, x)) for x in set(label_tmp) ) 
+    label_tmp = [y.numpy() for x, y in test_ds]
+    test_dict = dict((x, duplicates(label_tmp, x)) for x in set(label_tmp) ) 
+    d = {
+        "train": train_dict,
+        "val": val_dict,
+        "test" : test_dict,
+    }
+    return(d) 
+
+
+
+
+res_val5 = res_val[[x for x in range(len(y_label)) if y_label[x] in range(10)]]
+y_label5 = [ y_label[x] for x in range(len(y_label)) if y_label[x] in range(10)]
+
+#res_val5 = res_val[[x for x in range(len(y_label)) if y_label[x] in range(109,109+158)]]
+#y_label5 = [ y_label[x] for x in range(len(y_label)) if y_label[x] in range(109,109+158)]
+
+np.savetxt(("results/"   +  todaystr  + "/label_test_10.tsv"), y_label5, delimiter='\t')
+np.savetxt(("results/"   +  todaystr  + "/vecs_test_10.tsv"), res_val5 , delimiter='\t')
+
