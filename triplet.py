@@ -34,10 +34,10 @@ if gpus:
 img_height = 224
 img_width = 224
 batch_size = 128
-n_epochs = 50
+n_epochs = 20
 LR = 0.001
 LR2 = 0.00001
-NOFREEZE = 5
+NOFREEZE = 3
 dr = 0.5
 
 #data_dir = "/media/sonia/DATA/CASIA90_TRAIN"
@@ -227,7 +227,7 @@ def augment0(image, label):
     return (img, label)
 
 def augment(image, label):
-    rd_angle = round(rd.uniform(0, 0.2), 2)
+    rd_angle = round(rd.uniform(0, 0.5), 2)
     img = tfa.image.transform_ops.rotate(image, rd_angle)
     #img = tf.clip_by_value(img, 0.0, 1.0)
     img = tf.image.random_contrast(img, lower=0.8, upper=1.2)
@@ -367,7 +367,7 @@ def model_vgg16():
     model.add(tf.keras.layers.Dense(128, activation=None))
     model.add(tf.keras.layers.Lambda(lambda x: tf.math.l2_normalize(x, axis=1)))
     model.summary()
-    for layer in model.layers[:-5]:
+    for layer in model.layers[:-3]:
         layer.trainable = False
     for layer in model.layers:
         print(layer, layer.trainable)
@@ -589,17 +589,17 @@ np.savetxt(("results/"   +  todaystr  + "/label_test.tsv"), y_label, delimiter='
 np.savetxt(("results/"   +  todaystr  + "/vecs_test.tsv"), res_val , delimiter='\t')
 
 
-all1000_mAP = []
-for it in range(100) : 
+all100_mAP = []
+for it in range(1000) : 
     #On applique pour chaque indiv le calcule de l' average precision
     #mAP_each_ind liste avec le AP de tous les indivdus
     mAP_each_ind= [calc_ap_per_ind(res_val,i,  y_dict,TOP=5) for i in list(y_dict.keys())]
-    all1000_mAP.append( np.mean(mAP_each_ind))
+    all100_mAP.append( np.mean(mAP_each_ind))
     
-np.mean(all1000_mAP)
+np.mean(all100_mAP)
 
 print(" mAP@5 (IT100) - TEST ")
-print(np.mean(all1000_mAP))
+print(np.mean(all100_mAP))
 
 def dict_ind_img(train_ds,val_ds,test_ds):
     """
@@ -619,6 +619,7 @@ def dict_ind_img(train_ds,val_ds,test_ds):
     return(d) 
 
 
+"""
 
 
 res_val5 = res_val[[x for x in range(len(y_label)) if y_label[x] in range(10)]]
@@ -630,3 +631,4 @@ y_label5 = [ y_label[x] for x in range(len(y_label)) if y_label[x] in range(10)]
 np.savetxt(("results/"   +  todaystr  + "/label_test_10.tsv"), y_label5, delimiter='\t')
 np.savetxt(("results/"   +  todaystr  + "/vecs_test_10.tsv"), res_val5 , delimiter='\t')
 
+"""
