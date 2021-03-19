@@ -20,6 +20,8 @@ from keras_vggface.vggface import VGGFace
 import sklearn.metrics.pairwise
 from keras.callbacks import Callback
 import random as rd
+import pandas as pd 
+
 """
 # load_ext tensorboard
 gpus = tf.config.experimental.list_physical_devices('GPU')
@@ -34,7 +36,7 @@ if gpus:
 img_height = 224
 img_width = 224
 batch_size = 128
-n_epochs = 20
+n_epochs = 10
 LR = 0.001
 LR2 = 0.00001
 NOFREEZE = 3
@@ -94,9 +96,56 @@ f.close()
 list_ds = tf.data.Dataset.list_files(str(data_dir/'*/*.jpeg'), shuffle=False)
 #list_ds = tf.data.Dataset.list_files("/media/sonia/DATA/CASIA_SUB_TRAIN/images" + '/*/*', shuffle=False) #shuffle ????
 #list_ds = list_ds.shuffle(image_count, reshuffle_each_iteration=False)
+#class_names = np.array(sorted([dir1 for dir1 in os.listdir(data_dir)]))
+#print(class_names)
 
-class_names = np.array(sorted([dir1 for dir1 in os.listdir(data_dir)]))
-print(class_names)
+
+##############################################################################
+#--- on va faire une triplet loss avec 2 catégories H/F ---#
+gender = pd.read_csv('/media/sonia/DATA/facescrub/GenderSelf.csv',index_col=0,header=0)
+#gender = gender.set_index('actores')
+#class_names = np.array(gender.sort_values('actores').GenderSelf)
+#print(class_names)
+class_names = np.array(["F","M"])
+d_gender= dict( zip( gender.actores, pd.Series(gender.GenderSelf, dtype="category")))
+gender.GenderSelf = pd.Series(gender.GenderSelf, dtype="category")
+gender['code'] = gender.GenderSelf.cat.codes
+
+
+imgs = [val for sublist in [[os.path.join(i[0], j) for j in i[2]] for i in os.walk(data_dir)] for val in sublist if '.jpeg' in val]
+cat = [i.split('/')[-2] for i in imgs]
+df = pd.DataFrame()
+df['img']  = imgs
+df['actores'] = cat
+
+df = df.merge(gender)
+
+filenames = tf.constant(df.img)
+labels = tf.constant(df.code)
+list_ds = tf.data.Dataset.from_tensor_slices((filenames, labels))
+
+# To process the image
+def decode_img(img):
+  # convert the compressed string to a 3D uint8 tensor
+  img = tf.image.decode_jpeg(img, channels=3)
+  # resize the image to the desired size
+  resized_image = tf.image.resize(img, [224, 224])
+  final_image = tf.keras.applications.vgg16.preprocess_input(resized_image)
+  #final_image = tf.keras.applications.resnet.preprocess_input(resized_image)
+  #final_image = tf.keras.applications.resnet50.preprocess_input(resized_image)
+  return final_image
+
+
+def process_gender(filename, label):
+    #filename = tf.read_file(filename)
+    img = tf.io.read_file(filename)  # load the raw data from the file as a string
+    img = decode_img(img)
+    return img, label
+
+list_ds = list_ds.map(process_gender)
+
+##############################################################################
+
 """
 
 val_size = int(image_count * 0.2)
@@ -124,12 +173,23 @@ test_ds = test_ds.take(test_size)
 #print(tf.data.experimental.cardinality(train_ds).numpy())
 #print(tf.data.experimental.cardinality(val_ds).numpy())
 #print(tf.data.experimental.cardinality(test_ds).numpy())
-
+"""
 #Convert path to (img, label) tuple
 def get_label(file_path):
   parts = tf.strings.split(file_path, os.path.sep)  # convert the path to a list of path components
   one_hot = parts[-2] == class_names  # The second to last is the class-directory
   return tf.argmax(tf.cast(one_hot, tf.int32))
+"""
+#Convert path to (img, label) tuple
+def get_label(file_path):
+  #parts = tf.strings.split(file_path, os.path.sep)  # convert the path to a list of path components
+  parts = file_path.numpy().decode().split(os.path.sep)
+  #one_hot = tf.convert_to_tensor(d_gender[tf.constant((parts[-2])).numpy().decode("utf-8")] == class_names)  # The second to last is the class-directory
+  one_hot = tf.convert_to_tensor(d_gender[parts[-2]] == class_names)  # The second to last is the class-directory
+  #one_hot = tf.convert_to_tensor(one_hot)
+  return tf.argmax(tf.cast(one_hot, tf.int32))
+
+
 """
 def decode_img(img):
   img = tf.image.decode_jpeg(img, channels=3)   # convert the compressed string to a 3D uint8 tensor
@@ -160,9 +220,12 @@ AUTOTUNE = tf.data.experimental.AUTOTUNE
 #train_ds = train_ds.map(process_path, num_parallel_calls=AUTOTUNE)
 #val_ds = val_ds.map(process_path, num_parallel_calls=AUTOTUNE)
 #test_ds = test_ds.map(process_path, num_parallel_calls=AUTOTUNE)
-list_ds = list_ds.map(process_path, num_parallel_calls=AUTOTUNE)
-"""
 
+#list_ds = list_ds.map(process_path, num_parallel_calls=AUTOTUNE)
+#list_ds = list_ds.map(lambda x: tf.py_function(process_path, [x], [tf.float32,tf.int64]), num_parallel_calls=AUTOTUNE)
+
+
+"""
 
 train_ds = list_ds.take(n_train)
 val_ds = list_ds.skip(n_train).take(n_valid)
@@ -170,7 +233,8 @@ test_ds = list_ds.skip(n_train + n_valid).take(n_test)
 """
 #CLOSE-DS#
 # Size of dataset
-n = sum(1 for _ in list_ds)
+n = len(imgs)
+#n = sum(1 for _ in list_ds)
 n_train = int(n * 0.7)
 n_val = int(n * 0.1)
 #n_test= int(n * 0.01)
@@ -474,7 +538,7 @@ class map_N(Callback):
         self.x = x
     def on_train_begin(self, logs={}):
         self.all100_mAP = []
-        self.TOP = 5
+        self.TOP = 1
     def on_epoch_end(self, epoch, logs={}):
         res_val = self.model.predict(self.x,verbose=1) #embedding
         y_label = list(np.concatenate([y for x, y in self.x], axis=0))
@@ -590,10 +654,10 @@ np.savetxt(("results/"   +  todaystr  + "/vecs_test.tsv"), res_val , delimiter='
 
 
 all100_mAP = []
-for it in range(1000) : 
+for it in range(100) : 
     #On applique pour chaque indiv le calcule de l' average precision
     #mAP_each_ind liste avec le AP de tous les indivdus
-    mAP_each_ind= [calc_ap_per_ind(res_val,i,  y_dict,TOP=5) for i in list(y_dict.keys())]
+    mAP_each_ind= [calc_ap_per_ind(res_val,i,  y_dict,TOP=1) for i in list(y_dict.keys())]
     all100_mAP.append( np.mean(mAP_each_ind))
     
 np.mean(all100_mAP)
