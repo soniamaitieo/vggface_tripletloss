@@ -33,8 +33,8 @@ if gpus:
 
 img_height = 224
 img_width = 224
-batch_size = 128
-n_epochs = 200
+batch_size = 32
+n_epochs = 20
 LR = 0.001
 LR2 = 0.00001
 NOFREEZE = 2
@@ -42,6 +42,7 @@ NOFREEZE = 2
 
 #data_dir = "/media/sonia/DATA/CASIA90_TRAIN"
 data_dir ="/media/sonia/DATA/CASIA_SUB_TRAIN/images"
+data_dir= "/home/sonia/CASIA_minitrain/CASIA_minitrain"
 #data_dir =  "/media/sonia/DATA/CASIA_minitrain"
 data_dir = pathlib.Path(data_dir)
 image_count = len(list(data_dir.glob('*/*.jpg')))
@@ -159,9 +160,9 @@ def augment0(image, label):
     #img = tf.image.random_crop(img, size=[img_height,img_width, 3])
     return (img, label)
 
-def augment(image, label):
-    rd_angle = round(rd.uniform(0, 0.2), 2)
-    img = tfa.image.transform_ops.rotate(image, rd_angle)
+def augment(img, label):
+    #rd_angle = round(rd.uniform(0, 0.2), 2)
+    #img = tfa.image.transform_ops.rotate(image, rd_angle)
     #img = tf.clip_by_value(img, 0.0, 1.0)
     img = tf.image.random_contrast(img, lower=0.8, upper=1.2)
     img = tf.image.random_saturation(img, lower=0.8, upper=1.2) 
@@ -182,7 +183,7 @@ def augmentso(image, label):
 def configure_for_performance(ds):
   ds = ds.cache()
   ds = ds.shuffle(buffer_size=1000)
-  ds = ds.map(augment, num_parallel_calls=AUTOTUNE) # augmentation call
+  #ds = ds.map(augment, num_parallel_calls=AUTOTUNE) # augmentation call
   ds = ds.batch(batch_size,drop_remainder=True)
   ds = ds.prefetch(buffer_size=AUTOTUNE)
   return ds
@@ -266,7 +267,7 @@ def model_resnet50_2():
     print("Architecture custom")
     print(model.summary())
     # -8 si defreeze le dernier bloc de conv
-    for layer in model.layers[:-8]:
+    for layer in model.layers[:-2]:
         layer.trainable = False
     for layer in model.layers:
         print(layer, layer.trainable)
@@ -276,7 +277,6 @@ def model_resnet50_2():
 model = model_resnet50_2()
 
 
-    
 def calc_TOPacc(distance_array, val_ds, TOP = 5):
     y = np.concatenate([y for x, y in val_ds], axis=0)
     #print(y)
@@ -351,9 +351,8 @@ model.compile(
 # Train the network
 history = model.fit(
     train_ds,
-    validation_data = val_ds,
-    epochs=n_epochs,
-   callbacks=[TopX(val_ds),lr_callback]
+    epochs=n_epochs
+   #callbacks=[TopX(val_ds)]
     )
 
 #tensorboard --logdir logs/fit
@@ -513,3 +512,39 @@ print(map_val)
 """
 
 
+class Metrics(keras.callbacks.Callback):
+    def on_train_begin(self, logs={}):
+
+        self.precision = []
+        self.f1scores = []
+        self.prc=0
+        self.f1s=0
+        
+        self.all1000_mAP = []
+        
+
+    def on_epoch_end(self, epoch, logs={}):
+        y_label = list(np.concatenate([y for x, y in validation_data], axis=0))
+        res_val = self.model.predict(validation_data)
+        predict = np.round(np.asarray(self.model.predict([self.validation_data[0],self.validation_data[1]])))
+        targ = self.validation_data[2]
+
+        predict = (predict < 0.5).astype(np.float)
+
+
+        self.prc=sklm.precision_score(targ, predict)
+        self.f1s=sklm.f1_score(targ, predict)
+        self.precision.append(prc)
+        self.f1scores.append(f1s)
+
+        #Here is where I update the logs dictionary:
+        logs["prc"]=self.prc
+        logs["f1s"]=self.f1s
+
+
+    for it in range(1000) : 
+    #On applique pour chaque indiv le calcule de l' average precision
+    #mAP_each_ind liste avec le AP de tous les indivdus
+    mAP_each_ind= [calc_ap_per_ind(i, y_dict,TOP=5) for i in list(y_dict.keys())]
+    all1000_mAP.append( np.mean(mAP_each_ind))
+        print("— val_f1: %f — val_precision: %f" %(self.f1s, self.prc))
