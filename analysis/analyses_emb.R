@@ -42,10 +42,20 @@ ggplot(data = CFD[which(CFD$GenderSelf == "F"),], aes(x = Attractive , y =LL_F))
   geom_point(alpha = 0.3) +    stat_cor()
 
 
-ggplot(data = CFD, aes(x = Feminine , y =rank(dist_centre_F), color=GenderSelf)) +
+ggplot(data = CFD, aes(x = Feminine , y =Attractive, color=GenderSelf)) +
   stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
   geom_smooth(method="lm",se=FALSE) +
   geom_point(alpha = 0.3)  +  stat_cor(aes(color = GenderSelf))
+
+geom_point(alpha = 0.3) +    stat_cor()
+
+
+ggplot(data = CFD, aes(x = Feminine , y =rank(dist_centre_F), color=GenderSelf))) +
+  stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
+  geom_smooth(method="lm",se=FALSE) +
+  geom_point(alpha = 0.3)  +  stat_cor(aes(color = GenderSelf))
+
+
 
 
 ggplot(data = CFD, aes(x = Feminine , y =rank(dist_centre_F), color=GenderSelf)) +
@@ -58,6 +68,12 @@ ggplot(data = CFD, aes(x = Attractive , y =rank(dist_centre_H), color=GenderSelf
   stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
   geom_smooth(method="lm",se=FALSE) +
   geom_point(alpha = 0.3)  +  stat_cor(aes(color = GenderSelf))
+
+ggplot(data = CFD, aes(x = Attractive , y =LL, color=GenderSelf)) +
+  stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
+  geom_smooth(method="lm",se=FALSE) +
+  geom_point(alpha = 0.3)  +  stat_cor(aes(color = GenderSelf))
+
 
 
 ggplot(data = CFD, aes(x = Feminine , y =rank(proba_F_svm), color=GenderSelf)) +
@@ -112,10 +128,43 @@ ggplot(data = df1, aes(x = mean_umap1 , y =LL , color=GenderSelf)) +
 
 
 res_emb <- read.delim("/home/sonia/vggface_tripletloss/results/2021-03-12-8-47/CFDvecs.tsv", header=FALSE)
-CFDlabel<- read.csv("~/vggface_tripletloss/results/2021-03-12-8-47/CFD_N_analysis.csv", row.names=1)
+CFD<- read.csv("~/vggface_tripletloss/results/2021-03-12-8-47/CFD_N_analysis.csv", row.names=1)
 
 res_emb <- read.delim("/home/sonia/vggface_tripletloss/results/2021-03-17-17-16/CFDvecs.tsv", header=FALSE)
-CFDlabel <- read.table("/home/sonia/vggface_tripletloss/results/2021-03-17-17-16/CFD_N_analysis.csv", quote="\"", comment.char="", sep = "," , header = T)
+CFD <- read.table("/home/sonia/vggface_tripletloss/results/2021-03-17-17-16/CFD_N_analysis.csv", quote="\"", comment.char="", sep = "," , header = T)
+
+
+centroide = sapply(res_emb,mean)
+dist_centre = apply(res_emb, 1, FUN = function(x) sqrt(sum((x-centroide)^2)) )
+CFD$dist_centroid <- dist_centre
+
+
+ggplot(data = CFD, aes(x = Attractive, y = pF_svm_linear, color=GenderSelf)) +
+  #stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
+  geom_smooth(method="lm",se=FALSE) + 
+  geom_point(alpha = 0.3) +  theme_bw() + stat_cor(aes(color = GenderSelf),method = "pearson",size=5)  
+
+ggplot(data = CFD, aes(x = Attractive, y = dist_centre_H, color=GenderSelf)) +
+  #stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
+  geom_smooth(method="lm",se=FALSE) + 
+  geom_point(alpha = 0.3) +  theme_bw() + 
+  stat_cor(aes(color = GenderSelf),method = "pearson",size=5, label.y.npc="middle",label.x.npc="middle")  
+
+
+ggplot(data = CFD, aes(x = Attractive, y = dist_centre_F, color=GenderSelf)) +
+  #stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
+  geom_smooth(method="lm",se=FALSE) + 
+  geom_point(alpha = 0.3) +  theme_bw() + stat_cor(aes(color = GenderSelf),method = "pearson",size=5)  
+
+
+
+
+ggplot(data = CFD, aes(x = Attractive, y = rank(pF_svm_linear), color=GenderSelf)) +
+  #stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
+  geom_smooth(method="lm",se=FALSE) + 
+  geom_point(alpha = 0.3) +  theme_bw() + stat_cor(aes(color = GenderSelf))  
+
+
 
 
 pos_F = which(CFDlabel$GenderSelf == "M")
@@ -169,3 +218,31 @@ as.vector(r.km$centers)
 r.nlm <- nlm(mixt.deviance,c(.25,52,82,10,10),y)
 theta.est <- c(r.nlm$estimate[1], 1-r.nlm$estimate[1], r.nlm$estimate[2:5])
 print(matrix(theta.est,nrow=3,byrow = T))
+
+
+
+library(FactoMineR)
+CFDquant <- CFD[,5:12]
+CFDquant <-CFD[ , purrr::map_lgl(CFD, is.numeric)]
+pca.CFD <- PCA((CFDquant[ , colSums(is.na(CFDquant)) == 0]))
+CFDquant_withoutAF <-CFDquant[ , -which(names(CFDquant) %in% c("Feminine","Attractive"))]
+pca.CFD2 <- PCA((CFDquant_withoutAF [ , colSums(is.na(CFDquant_withoutAF )) == 0]))
+
+
+library(plotly)
+
+#variables à choisir par shiny
+dim1 = 1
+dim2 = 2
+p <- plot_ly(CFD,x=pca.CFD2$ind$coord[,dim1] ,y=pca.CFD2$ind$coord[,dim2],text=CFD$Model,
+             mode="markers",color = CFD$GenderSelf,marker=list(size=11))
+p <- layout(p,title="PCA",
+            xaxis=list(title= paste("PC" ,dim1, ": Variance ",round(pca.CFD2$eig[dim1,2]),"%")),
+            yaxis=list(title= paste("PC" ,dim2, ": Variance ",round(pca.CFD2$eig[dim2,2]),"%")))
+
+p
+
+
+
+
+
