@@ -1,5 +1,6 @@
 library(shiny)
 
+# TODO: Get columns names from file
 columnsList <- list("Attractive", 
                     "Feminine",
                     "dist_centre_F", 
@@ -10,7 +11,7 @@ columnsList <- list("Attractive",
                     "proba_F_svm",
                     "pF_svm_linear")
 
-# Define UI for application that draws a histogram
+# Define UI for application
 ui <- shinyUI(fluidPage(
   
   # Application title
@@ -21,12 +22,11 @@ ui <- shinyUI(fluidPage(
     sidebarPanel(
       fileInput("file", h3("File input")),
       hr(),
+      
       selectInput("xaxis", 
                   label = "Choose X axis column",
                   choices = columnsList,
                   selected = "Attractive"),
-      
-      h3("Ranked"),
       checkboxInput("xrank", "Rank X Axis", value = FALSE),
       
       hr(),
@@ -34,14 +34,16 @@ ui <- shinyUI(fluidPage(
                   label = "Choose Y axis column",
                   choices = columnsList,
                   selected = "LL"),
-      
-      h3("Ranked"),
       checkboxInput("yrank", "Rank Y Axis", value = FALSE),
     ),
     
     # Show a plot of the generated distribution
     mainPanel(
-      plotOutput("distPlot")
+      # Tabs panel example
+      tabsetPanel(type = "tabs",
+                  tabPanel("AES Plot", plotOutput("distPlot")),
+                  tabPanel("ACP Plot", plotOutput("acpPlot"))
+      )
     )
   )
 ))

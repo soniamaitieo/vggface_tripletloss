@@ -1,13 +1,17 @@
 source("analyses_fn.R")
 library(shiny)
 
-# Define server logic required to draw a histogram
+# Define server logic
 server <- shinyServer(function(input, output) {
+
+  
   output$distPlot <- renderPlot({
+    
     inFile <- input$file
     
     if (is.null(inFile)) {
       # Default analysis file
+      # TODO: Get file with relative path
       CFD <- read.csv("/home/soniamai/Bureau/shinyapptest/test/data/CFD_N_analysis.csv", row.names = 1)
     } else {
       CFD <- read.csv(inFile$file, row.names=1)
@@ -22,6 +26,21 @@ server <- shinyServer(function(input, output) {
       yvalue <- paste("rank(", input$yaxis, ")")
     }
     
-    makeggplot(CFD, xvalue, yvalue, "GenderSelf")
+    makeggplot(CFD, xvalue, yvalue, "GenderSelf", stat_cor())
+  })
+  
+  output$acpPlot <- renderPlot({
+    
+    inFile <- input$file
+    
+    if (is.null(inFile)) {
+      # Default analysis file
+      # TODO: Get file with relative path
+      CFD <- read.csv("/home/soniamai/Bureau/shinyapptest/test/data/CFD_N_analysis.csv", row.names = 1)
+    } else {
+      CFD <- read.csv(inFile$file, row.names=1)
+    }
+    
+    makepca(CFD)
   })
 })
