@@ -20,10 +20,11 @@ from keras_vggface.vggface import VGGFace
 import sklearn.metrics.pairwise
 from keras.callbacks import Callback
 import random as rd
-import pandas as pd 
+import pandas as pd
 
 """
-# load_ext tensorboard
+
+
 gpus = tf.config.experimental.list_physical_devices('GPU')
 if gpus:
   try:
@@ -36,7 +37,7 @@ if gpus:
 img_height = 224
 img_width = 224
 batch_size = 128
-n_epochs = 10
+n_epochs = 100
 LR = 0.001
 LR2 = 0.00001
 NOFREEZE = 3
@@ -437,8 +438,26 @@ def model_vgg16():
         print(layer, layer.trainable)
     return(model)
 
+
+
+def model_vgg16_genderclassif():
+    vgg_model = VGGFace(include_top=True, input_shape=(224, 224, 3))
+    model = tf.keras.models.Sequential(vgg_model.layers[:-2])
+    model.add(tf.keras.layers.Dropout(dr))
+    model.add(tf.keras.layers.Dense(128, activation=None,name='feature'))
+    model.add(tf.keras.layers.Lambda(lambda x: tf.math.l2_normalize(x, axis=1)))
+    model.add(tf.keras.layers.Dense(len(class_names),  activation='softmax'))
+    model.summary()
+    for layer in model.layers[:-4]:
+        layer.trainable = False
+    for layer in model.layers:
+        print(layer, layer.trainable)
+    return(model)
+
+
 #model = model_resnet50_2()
-model = model_vgg16()
+#model = model_vgg16()
+model = model_vgg16_genderclassif()
 
 def calc_TOPacc(distance_array, val_ds, TOP = 5):
     y = np.concatenate([y for x, y in val_ds], axis=0)
@@ -551,6 +570,25 @@ class map_N(Callback):
         mAP_history.append(round(np.mean(self.all100_mAP)*100,1))
 
 
+class map_N_classif(Callback):
+    def __init__(self, x):
+        self.x = x
+    def on_train_begin(self, logs={}):
+        self.all100_mAP = []
+        self.TOP = 1
+    def on_epoch_end(self, epoch, logs={}):
+        feature_network = Model(self.model.input, self.model.get_layer('feature').output)
+        res_val = feature_network.predict(self.x)
+        #res_val = self.model.predict(self.x,verbose=1) #embedding
+        y_label = list(np.concatenate([y for x, y in self.x], axis=0))
+        y_dict = dict((x, duplicates(y_label, x)) for x in set(y_label) if y_label.count(x) > 1) #on vire indiv qui ont 1 seule image avec la condition
+        y_label
+        for it in range(100) :
+            mAP_each_ind= [calc_ap_per_ind(res_val,i, y_dict,TOP=self.TOP) for i in list(y_dict.keys())]
+            self.all100_mAP.append(np.mean(mAP_each_ind))
+        print(' MAP@{} - Accuracy {} %'.format(self.TOP, round(np.mean(self.all100_mAP)*100,1)))
+        mAP_history.append(round(np.mean(self.all100_mAP)*100,1))
+
 def lr_schedule(epoch):
   """
   Returns a custom learning rate that decreases as epochs progress.
@@ -570,13 +608,16 @@ lr_callback = tf.keras.callbacks.LearningRateScheduler(lr_schedule)
 model.compile(
     optimizer=tf.keras.optimizers.Adam(LR),
     #optimizer = tf.keras.optimizers.Adam(LR,beta_1=0.02,beta_2=0.02),
-    loss=tfa.losses.TripletSemiHardLoss())
+    #loss=tfa.losses.TripletSemiHardLoss())
+    loss=tf.losses.SparseCategoricalCrossentropy(),
+    metrics=['sparse_categorical_accuracy'])
 
 history = model.fit(
     train_ds,
     validation_data = val_ds,
     epochs=n_epochs,
-   callbacks=[map_N(val_ds),map_N(train_ds)]
+   #callbacks=[map_N(val_ds),map_N(train_ds)]
+   callbacks = [map_N_classif(val_ds),map_N_classif(train_ds)]
     )
 
 mAP_history_val, mAP_history_train = mAP_history[::2],mAP_history[1::2]
@@ -646,7 +687,8 @@ y_dict = dict((x, duplicates(y_label, x)) for x in set(y_label) if y_label.count
 mAP_each_ind= [calc_ap_per_ind(model.predict(train_ds,verbose=1),i,  y_dict,TOP=5) for i in list(y_dict.keys())]
 """
 y_label = list(np.concatenate([y for x, y in test_ds], axis=0))
-res_val = model.predict(test_ds,verbose=1) #embedding
+feature_network = Model(model.input, model.get_layer('feature').output)
+res_val = feature_network.predict(test_ds,verbose=1) #embedding
 y_dict = dict((x, duplicates(y_label, x)) for x in set(y_label) if y_label.count(x) > 1) #on vire indiv qui ont 1 seule image avec la condition
 
 np.savetxt(("results/"   +  todaystr  + "/label_test.tsv"), y_label, delimiter='\t')
