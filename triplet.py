@@ -3,8 +3,11 @@
 """
 Created on Thu Feb 11 14:52:34 2021
 
-@author: renoult
+@author: sonia
 """
+
+
+#--- LIBRRAIRIES ---#
 import sys
 import io
 import os
@@ -23,17 +26,15 @@ import random as rd
 import pandas as pd
 
 """
-
-
 gpus = tf.config.experimental.list_physical_devices('GPU')
 if gpus:
   try:
     tf.config.experimental.set_virtual_device_configuration(gpus[0], [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=513802240)])
   except RuntimeError as e:
     print(e)
-
 """
 
+#--- GLOBAL PARAMETERS ---#
 img_height = 224
 img_width = 224
 batch_size = 128
@@ -43,6 +44,8 @@ LR2 = 0.00001
 NOFREEZE = 3
 dr = 0.5
 
+
+#--- DATA DIR ---#
 #data_dir = "/media/sonia/DATA/CASIA90_TRAIN"
 #data_dir ="/media/sonia/DATA/CASIA_SUB_TRAIN/images"
 #data_dir =  "/media/sonia/DATA/CASIA_minitrain"
@@ -95,12 +98,17 @@ f.close()
 
 #--- DATA PROCESSING ---#
 list_ds = tf.data.Dataset.list_files(str(data_dir/'*/*.jpeg'), shuffle=False)
-#list_ds = tf.data.Dataset.list_files("/media/sonia/DATA/CASIA_SUB_TRAIN/images" + '/*/*', shuffle=False) #shuffle ????
+
 #list_ds = list_ds.shuffle(image_count, reshuffle_each_iteration=False)
-#class_names = np.array(sorted([dir1 for dir1 in os.listdir(data_dir)]))
+class_names = np.array(sorted([dir1 for dir1 in os.listdir(data_dir)]))
 #print(class_names)
 
+image_count = len(list(data_dir.glob('*/*.jpeg')))
 
+print("Nb_individus:" + str(len(class_names)))
+print("Nb_images:"+ str(image_count))
+
+"""
 ##############################################################################
 #--- on va faire une triplet loss avec 2 catégories H/F ---#
 gender = pd.read_csv('/media/sonia/DATA/facescrub/GenderSelf.csv',index_col=0,header=0)
@@ -144,7 +152,7 @@ def process_gender(filename, label):
     return img, label
 
 list_ds = list_ds.map(process_gender)
-
+"""
 ##############################################################################
 
 """
@@ -175,13 +183,6 @@ test_ds = test_ds.take(test_size)
 #print(tf.data.experimental.cardinality(val_ds).numpy())
 #print(tf.data.experimental.cardinality(test_ds).numpy())
 """
-#Convert path to (img, label) tuple
-def get_label(file_path):
-  parts = tf.strings.split(file_path, os.path.sep)  # convert the path to a list of path components
-  one_hot = parts[-2] == class_names  # The second to last is the class-directory
-  return tf.argmax(tf.cast(one_hot, tf.int32))
-"""
-#Convert path to (img, label) tuple
 def get_label(file_path):
   #parts = tf.strings.split(file_path, os.path.sep)  # convert the path to a list of path components
   parts = file_path.numpy().decode().split(os.path.sep)
@@ -189,8 +190,15 @@ def get_label(file_path):
   one_hot = tf.convert_to_tensor(d_gender[parts[-2]] == class_names)  # The second to last is the class-directory
   #one_hot = tf.convert_to_tensor(one_hot)
   return tf.argmax(tf.cast(one_hot, tf.int32))
+"""
+#Convert path to (img, label) tuple
 
 
+#Convert path to (img, label) tuple
+def get_label(file_path):
+  parts = tf.strings.split(file_path, os.path.sep)  # convert the path to a list of path components
+  one_hot = parts[-2] == class_names  # The second to last is the class-directory
+  return tf.argmax(tf.cast(one_hot, tf.int32))
 """
 def decode_img(img):
   img = tf.image.decode_jpeg(img, channels=3)   # convert the compressed string to a 3D uint8 tensor
@@ -222,7 +230,7 @@ AUTOTUNE = tf.data.experimental.AUTOTUNE
 #val_ds = val_ds.map(process_path, num_parallel_calls=AUTOTUNE)
 #test_ds = test_ds.map(process_path, num_parallel_calls=AUTOTUNE)
 
-#list_ds = list_ds.map(process_path, num_parallel_calls=AUTOTUNE)
+list_ds = list_ds.map(process_path, num_parallel_calls=AUTOTUNE)
 #list_ds = list_ds.map(lambda x: tf.py_function(process_path, [x], [tf.float32,tf.int64]), num_parallel_calls=AUTOTUNE)
 
 
@@ -234,8 +242,9 @@ test_ds = list_ds.skip(n_train + n_valid).take(n_test)
 """
 #CLOSE-DS#
 # Size of dataset
-n = len(imgs)
+#n = len(imgs)
 #n = sum(1 for _ in list_ds)
+n = image_count
 n_train = int(n * 0.7)
 n_val = int(n * 0.1)
 #n_test= int(n * 0.01)
@@ -455,6 +464,8 @@ def model_vgg16_genderclassif():
     return(model)
 
 
+
+
 #model = model_resnet50_2()
 #model = model_vgg16()
 model = model_vgg16_genderclassif()
@@ -507,7 +518,6 @@ class TopX(Callback):
 
 
 # We make a dictionnary where the index is the number of the individual, and the value is a list with the position of associated images into a list
-
 def duplicates(lst, item):
     return [i for i, x in enumerate(lst) if x == item]
 
@@ -575,7 +585,7 @@ class map_N_classif(Callback):
         self.x = x
     def on_train_begin(self, logs={}):
         self.all100_mAP = []
-        self.TOP = 1
+        self.TOP = 5
     def on_epoch_end(self, epoch, logs={}):
         feature_network = Model(self.model.input, self.model.get_layer('feature').output)
         res_val = feature_network.predict(self.x)
@@ -699,7 +709,7 @@ all100_mAP = []
 for it in range(100) : 
     #On applique pour chaque indiv le calcule de l' average precision
     #mAP_each_ind liste avec le AP de tous les indivdus
-    mAP_each_ind= [calc_ap_per_ind(res_val,i,  y_dict,TOP=1) for i in list(y_dict.keys())]
+    mAP_each_ind= [calc_ap_per_ind(res_val,i,  y_dict,TOP=5) for i in list(y_dict.keys())]
     all100_mAP.append( np.mean(mAP_each_ind))
     
 np.mean(all100_mAP)
