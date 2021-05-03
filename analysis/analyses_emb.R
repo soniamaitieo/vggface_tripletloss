@@ -1,6 +1,8 @@
-CFD<- read.csv("~/vggface_tripletloss/results/2021-03-04-17-13/CFD_N_analysis.csv", row.names=1)
+#CFD<- read.csv("~/vggface_tripletloss/results/2021-03-04-17-13/CFD_N_analysis.csv", row.names=1)
 CFD<- read.csv("~/vggface_tripletloss/results/2021-03-12-8-47/CFD_N_analysis.csv", row.names=1)
 CFD<- read.csv("~/vggface_tripletloss/results/2021-03-17-17-16/CFD_N_analysis.csv", row.names=1)
+CFD <- read.table("/home/sonia/vggface_tripletloss/results/2021-04-15-11-46/CFD_N_analysis.csv", quote="\"", comment.char="" , sep = "," , header = T)
+CFD <- read.table("/home/sonia/vggface_tripletloss/results/2021-04-19-11-10/CFD_N_analysis.csv", quote="\"", comment.char="" , sep = "," , header = T)
 
 library(ggplot2)
 library(devtools)
@@ -8,9 +10,32 @@ library(ggpubr)
 source_gist("524eade46135f6348140")
 
 ggplot(data = CFD, aes(x = Attractive , y =LL)) +
-  stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
+  #stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
   geom_smooth(method="lm",se=FALSE) +
-  geom_point(alpha = 0.3)
+  geom_point(alpha = 0.3) + stat_cor()
+
+ggplot(data = CFD, aes(x = Attractive , y = LL, color=GenderSelf)) +
+  #stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
+  geom_smooth(method="lm",se=FALSE) +
+  geom_point(alpha = 0.3)  +  stat_cor(aes(color = GenderSelf))
+
+
+
+ggplot(data = CFD, aes(x = Feminine , y =LL)) +
+  #stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
+  geom_smooth(method="lm",se=FALSE) +
+  geom_point(alpha = 0.3) + stat_cor()
+
+ggplot(data = CFD, aes(x = Feminine , y = LL, color=GenderSelf)) +
+  #stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
+  geom_smooth(method="lm",se=FALSE) +
+  geom_point(alpha = 0.3)  +  stat_cor(aes(color = GenderSelf),size=5, label.x.npc="left", label.y.npc="bottom", hjust=0)
+
+ggplot(data = CFD, aes(x = Feminine , y = LL)) +
+  #stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
+  geom_smooth(method="lm",se=FALSE) +
+  geom_point(alpha = 0.3)  +  stat_cor(size=5, label.x.npc="left", label.y.npc="bottom", hjust=0)
+
 
 
 ggplot(data = CFD, aes(x = Attractive , y =rank(LL))) +
@@ -21,14 +46,7 @@ ggplot(data = CFD, aes(x = Attractive , y =rank(LL))) +
 ggplot(data = CFD, aes(x = Attractive , y =LL_F)) +
   stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
   geom_smooth(method="lm",se=FALSE) +
-  geom_point(alpha = 0.3)
-
-
-ggplot(data = CFD[which(CFD$GenderSelf == "F"),], aes(x = Attractive , y =rank(LL_F))) +
-  stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
-  geom_smooth(method="lm",se=FALSE) +
-  geom_point(alpha = 0.3)
-
+  geom_point(alpha = 0.3) +  stat_cor()
 
 ggplot(data = CFD, aes(x = Attractive , y =LL_M)) +
   stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
@@ -36,26 +54,37 @@ ggplot(data = CFD, aes(x = Attractive , y =LL_M)) +
   geom_point(alpha = 0.3) +  stat_cor()
 
 
-ggplot(data = CFD[which(CFD$GenderSelf == "F"),], aes(x = Attractive , y =LL_F)) +
+ggplot(data = CFD, aes(x = Feminine , y =LL_F)) +
   stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
   geom_smooth(method="lm",se=FALSE) +
-  geom_point(alpha = 0.3) +    stat_cor()
+  geom_point(alpha = 0.3) +  stat_cor()
+
+ggplot(data = CFD, aes(x = Feminine , y =LL_M)) +
+  stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
+  geom_smooth(method="lm",se=FALSE) +
+  geom_point(alpha = 0.3) +  stat_cor()
 
 
-ggplot(data = CFD, aes(x = Feminine , y =Attractive, color=GenderSelf)) +
+
+ggplot(data = CFD, aes(x = Feminine , y =dist_centre_F, color=GenderSelf)) +
   stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
   geom_smooth(method="lm",se=FALSE) +
   geom_point(alpha = 0.3)  +  stat_cor(aes(color = GenderSelf))
 
-geom_point(alpha = 0.3) +    stat_cor()
-
-
-ggplot(data = CFD, aes(x = Feminine , y =rank(dist_centre_F), color=GenderSelf))) +
+ggplot(data = CFD, aes(x = Feminine , y =dist_centre_H, color=GenderSelf)) +
   stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
   geom_smooth(method="lm",se=FALSE) +
   geom_point(alpha = 0.3)  +  stat_cor(aes(color = GenderSelf))
 
+ggplot(data = CFD, aes(x = Attractive , y =dist_centre_F, color=GenderSelf)) +
+  stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
+  geom_smooth(method="lm",se=FALSE) +
+  geom_point(alpha = 0.3)  +  stat_cor(aes(color = GenderSelf))
 
+ggplot(data = CFD, aes(x = Attractive , y =dist_centre_H, color=GenderSelf)) +
+  stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
+  geom_smooth(method="lm",se=FALSE) +
+  geom_point(alpha = 0.3)  +  stat_cor(aes(color = GenderSelf))
 
 
 ggplot(data = CFD, aes(x = Feminine , y =rank(dist_centre_F), color=GenderSelf)) +
@@ -88,11 +117,10 @@ ggplot(data = CFD, aes(x = Feminine , y =rank(pF_svm_linear), color=GenderSelf))
   geom_point(alpha = 0.3)
 
 
-ggplot(data = CFD, aes(x = Feminine , y =rank(pF_svm_linear), color=GenderSelf)) +
+ggplot(data = CFD, aes(x = Feminine , y =LL, color=GenderSelf)) +
   stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
   geom_smooth(method="lm",se=FALSE) +
   geom_point(alpha = 0.3)  +  stat_cor(aes(color = GenderSelf))
-
 
 
 ggplot(data = CFD, aes(x = Feminine , y =pF_svm_rbf, color=GenderSelf)) +
@@ -105,6 +133,16 @@ ggplot(data = CFD, aes(x = Attractive, y =rank(pF_svm_linear))) +
   geom_smooth(method="lm",se=FALSE) +
   geom_point(alpha = 0.3) + stat_cor()
 
+
+ggplot(data = CFD, aes(x = Attractive , y =LL, color=GenderSelf)) +
+  #stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
+  geom_smooth(method="lm",se=FALSE) +
+  geom_point(alpha = 0.3) +  stat_cor(aes(color = GenderSelf))
+
+ggplot(data = CFD, aes(x = Attractive, y =LL)) +
+  stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
+  geom_smooth(method="lm",se=FALSE) +
+  geom_point(alpha = 0.3) + stat_cor()
 
 ggplot(data = CFD, aes(x = Attractive , y =rank(pF_svm_rbf), color=GenderSelf)) +
   stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
@@ -246,3 +284,82 @@ p
 
 
 
+#---------------------------
+
+library(FactoMineR) 
+dt.acp=PCA(res_emb ,axes = c(1,2),ncp=30)
+head(dt.acp$eig)
+plot(dt.acp , habillage = 37)
+#variabilité expliqés par les différents composants - distance cum des variabilités
+barplot(dt.acp$eig[,1],main="Eboulis de valeur propre", xlab="Nb de composants", names.arg=1:nrow(dt.acp$eig))
+
+
+
+#variables à choisir par shiny
+dim1 = 1
+dim2 = 3
+p <- plot_ly(CFD,x=dt.acp$ind$coord[,dim1] ,y=dt.acp $ind$coord[,dim2],text=CFD$Model,
+             mode="markers",color = CFD$GenderSelf,marker=list(size=11))
+p <- layout(p,title="PCA",
+            xaxis=list(title= paste("PC" ,dim1, ": Variance ",round(dt.acp$eig[dim1,2]),"%")),
+            yaxis=list(title= paste("PC" ,dim2, ": Variance ",round(dt.acp$eig[dim2,2]),"%")))
+
+p
+
+
+dim1 = 1
+dim2 = 3
+
+p <- plot_ly(CFD,x=dt.acp$ind$coord[,dim1] ,y=dt.acp $ind$coord[,dim2],text=CFD$Model,
+             mode="markers",color = CFD$GenderSelf,marker=list(size=11))
+p <- layout(p,title="PCA",
+            xaxis=list(title= paste("PC" ,dim1, ": Variance ",round(dt.acp$eig[dim1,2]),"%")),
+            yaxis=list(title= paste("PC" ,dim2, ": Variance ",round(dt.acp$eig[dim2,2]),"%")))
+
+p
+
+
+dt.kmeans = kmeans(res_emb,4)
+CFD$cluster = dt.kmeans$cluster
+
+
+
+p <- plot_ly(CFD,x=dt.acp$ind$coord[,dim1] ,
+             mode="markers",color = CFD$GenderSelf,marker=list(size=11))
+p <- layout(p,title="PCA",
+            xaxis=list(title= paste("PC" ,dim1, ": Variance ",round(dt.acp$eig[dim1,2]),"%")),
+            yaxis=list(title= paste("PC" ,dim2, ": Variance ",round(dt.acp$eig[dim2,2]),"%")))
+
+p
+
+
+r= c()
+for (j in 1:dim(dt.acp$ind$coord)[2]){
+  print(j)
+  i=dt.acp$ind$coord[,j]
+  r=append(r,cor(i,CFD$Attractive))}
+
+p <- plot_ly(CFD,x=CFD$umap1 ,y=CFD$umap2,text=CFD$Model,
+             mode="markers",color = CFD$GenderSelf,marker=list(size=11))
+p <- layout(p,title="PCA",
+            xaxis=list(title= paste("PC" ,dim1, ": Variance ",round(dt.acp$eig[dim1,2]),"%")),
+            yaxis=list(title= paste("PC" ,dim2, ": Variance ",round(dt.acp$eig[dim2,2]),"%")))
+
+p
+
+p <- plot_ly(CFD,x=CFD$umap1 ,y=CFD$umap2,text=CFD$Model,
+             mode="markers",color = CFD$Feminine,marker=list(size=11))
+
+
+
+ggplot(data = CFD, aes(x = Attractive , y =umap1)) +
+  stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
+  geom_smooth(method="lm",se=FALSE) +
+  geom_point(alpha = 0.3)
+
+
+
+ggplot(data = CFD, aes(x = Feminine , y =umap1, color=GenderSelf)) +
+  stat_smooth_func(geom="text",method="lm",hjust=0,parse=TRUE) +
+  geom_smooth(method="lm",se=FALSE) +
+  geom_point(alpha = 0.3)  +  stat_cor(aes(color = GenderSelf))

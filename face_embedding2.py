@@ -37,17 +37,32 @@ inputShape = (224, 224)
 
 #tl ind
 data_dir = "/home/sonia/cfd/CFDVersion2.5/Images/CFD"
+data_dir = "/media/sonia/RENOULT secure/SCUT-FBP/images"
+data_dir = "/media/sonia/RENOULT secure/Photos Visages Michel Raymond Dataset 1"
+data_dir = "/media/sonia/RENOULT secure/Photos Visages Michel Raymond Dataset 3"
+
+
+
 #res_dir = "/home/sonia/vggface_tripletloss/results/2021-02-26-16-57"
 #res_dir="/home/sonia/vggface_tripletloss/results/2021-03-09-16-19"
 #res_dir = "/home/sonia/vggface_tripletloss/results/2021-03-11-9-54"
 res_dir= "/home/sonia/vggface_tripletloss/results/2021-03-12-8-47"
-res_dir="/home/sonia/vggface_tripletloss/results/2021-03-04-17-13"
+#res_dir="/home/sonia/vggface_tripletloss/results/2021-03-04-17-13"
 
 #tl sex
 res_dir = "/home/sonia/vggface_tripletloss/results/2021-03-17-17-16"
+
+
+#sex classf
+res_dir = "/home/sonia/vggface_tripletloss/results/2021-04-15-11-46"
+
+#indiv classf
+res_dir = "/home/sonia/vggface_tripletloss/results/2021-04-19-11-10"
+
 #--- MODEL ---#
 
 mymodel = tf.keras.models.load_model(res_dir + "/my_model", custom_objects = { 'Loss': tfa.losses.TripletSemiHardLoss },compile=False)
+mymodel = tf.keras.models.load_model(res_dir + "/my_model")
 
 
 #--- DATA PROCESSING GENDER ---#
@@ -57,15 +72,46 @@ imgs = [val for sublist in [[os.path.join(i[0], j) for j in i[2]] for i in os.wa
 cat = [i.split('/')[-2][1] for i in imgs]
 list_ds = tf.data.Dataset.from_tensor_slices((imgs, cat))
 
+#---#
+#scut
+imgs = [val for sublist in [[os.path.join(i[0], j) for j in i[2]] for i in os.walk(data_dir)] for val in sublist if '.jpg' in val]
+#gender
+cat = [i.split('/')[-1][1] for i in imgs]
+#indiv
+cat = [i.split('/')[-1].split('.')[0] for i in imgs]
+
+list_ds = tf.data.Dataset.from_tensor_slices((imgs, cat))
+
+#---#
+#raymond1
+imgs = [val for sublist in [[os.path.join(i[0], j) for j in i[2]] for i in os.walk(data_dir)] for val in sublist if '.jpg' in val]
+#indiv
+cat = [i.split('/')[-1].split('.')[0] for i in imgs]
+#gender
+cat = len(imgs) * ['F']
+
+list_ds = tf.data.Dataset.from_tensor_slices((imgs, cat))
+
+
+#---#
+#raymond3
+imgs = [val for sublist in [[os.path.join(i[0], j) for j in i[2]] for i in os.walk(data_dir)] for val in sublist if '.jpg' in val]
+#indiv
+cat = [i.split('/')[-1].split('.')[1] for i in imgs]
+#gender
+cat = len(imgs) * ['F']
+list_ds = tf.data.Dataset.from_tensor_slices((imgs, cat))
+
+
 #--- DATA PROCESSING ---#
 
 #list_ds = tf.data.Dataset.list_files(str(data_dir + '/*/*N.jpg'), shuffle=False)
 #list_ds = tf.data.Dataset.list_files(str(data_dir + '/*/*'), shuffle=False)
 #list_ds = tf.data.Dataset.list_files(str(data_dir + '/*/*.jpg'), shuffle=False)
-
+#list_ds = tf.data.Dataset.list_files(str(data_dir + '/*.jpg'), shuffle=False)
 
 # get the count of image files in the test directory
-image_count= len([i for i in list_ds ])
+image_count = len([i for i in list_ds ])
 
 #get all images files
 image_files = [i.numpy().decode("utf-8") for i in list_ds ]
@@ -105,6 +151,7 @@ class_names = np.array(sorted([dir1 for dir1 in os.listdir(data_dir)]))
 test_ds = list_ds
 
 
+#--- DATA PROCESSING GENDER ---#
 
 
 def process_gender(filename, label):
@@ -140,6 +187,7 @@ res_emb = mymodel.predict(test_ds)
 label = class_names[y]
 #y_label = list(y)
 y_label = list(label)
+df_files = pd.DataFrame({'Model':label,'Image':image_files, 'y_label':y_label})
 
 #sexe
 y_label = [str(i, 'utf-8') for i in y_label]
@@ -147,8 +195,26 @@ df_files = pd.DataFrame({'Model': [i.split('/')[-2] for i in imgs],
                          'Image':[i.split('/')[-1] for i in imgs],
                          'y_label':y_label})
 
+#sexe-classif
+y = np.concatenate([y for x, y in test_ds], axis=0)
+from keras import Model
+feature_network = Model(mymodel.input, mymodel.get_layer('feature').output)
+res_emb = feature_network.predict(test_ds,verbose=1) #embedding
+y_label = list(y)
+y_label = [str(i, 'utf-8') for i in y_label]
+df_files = pd.DataFrame({'Model': [i.split('/')[-2] for i in imgs],
+                         'Image':[i.split('/')[-1] for i in imgs],
+                         'y_label':y_label})
 
-#df_files = pd.DataFrame({'Model':label,'Image':image_files, 'y_label':y_label})
+#ind-classif
+y = np.concatenate([y for x, y in test_ds], axis=0)
+from keras import Model
+feature_network = Model(mymodel.input, mymodel.get_layer('feature').output)
+res_emb = feature_network.predict(test_ds,verbose=1) #embedding
+label = class_names[y]
+#y_label = list(y)
+y_label = list(label)
+df_files = pd.DataFrame({'Model':label,'Image':image_files, 'y_label':y_label})
 
 
 
@@ -202,7 +268,7 @@ all1000_mAP = []
 for it in range(1000) : 
     #On applique pour chaque indiv le calcule de l' average precision
     #mAP_each_ind liste avec le AP de tous les indivdus
-    mAP_each_ind= [calc_ap_per_ind(res_emb, i, y_dict,TOP=1) for i in list(y_dict.keys())]
+    mAP_each_ind= [calc_ap_per_ind(res_emb, i, y_dict,TOP=5) for i in list(y_dict.keys())]
     all1000_mAP.append( np.mean(mAP_each_ind))
     
 np.mean(all1000_mAP)
@@ -225,7 +291,7 @@ y_lab5_gender = [x[1] for x in list(class_names[y_lab5]) ]
 
 np.savetxt("CFDlabel10.tsv", y_lab5, delimiter='\t')
 np.savetxt("CFDvecs10.tsv", res_val5, delimiter='\t')
-np.savetxt("CFDlabel10_gender.tsv", y_lab5_gender, delimiter='\t' ,  fmt='%s')
+np.savetxt("CFDlabel10_gender.tsv", y_lab5_gender, delimiter='\t' c)
 np.savetxt("CFDlabel1_ethn.tsv", y_lab5_ethn, delimiter='\t')
 """
 

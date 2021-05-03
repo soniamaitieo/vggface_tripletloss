@@ -12,7 +12,7 @@ server <- shinyServer(function(input, output) {
     if (is.null(inFile)) {
       # Default analysis file
       # TODO: Get file with relative path
-      CFD <- read.csv("/home/soniamai/Bureau/shinyapptest/test/data/CFD_N_analysis.csv", row.names = 1)
+      CFD <- read.csv("/home/sonia/vggface_tripletloss/analysis/shiny_app/data/CFD_N_analysis.csv", row.names = 1)
     } else {
       CFD <- read.csv(inFile$file, row.names=1)
     }
